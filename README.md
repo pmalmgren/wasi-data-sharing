@@ -1,4 +1,4 @@
-# Sharing linear memory between the host and WebAssembly modules
+# Sharing data between hosts with stdio
 
 This repository has an accompanying [blog post](https://petermalmgren.com/serverside-wasm-data/).
 
