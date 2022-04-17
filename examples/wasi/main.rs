@@ -1,10 +1,7 @@
-use std::{borrow::BorrowMut, sync::{Arc, Mutex}};
+use std::sync::{Arc, Mutex};
 
 use anyhow::Result;
-use wasi_common::{
-    pipe::{ReadPipe, WritePipe},
-    WasiCtx,
-};
+use wasi_common::WasiCtx;
 use wasmtime::*;
 use wasmtime_wasi::sync::WasiCtxBuilder;
 use wire::Input;
@@ -14,23 +11,11 @@ use crate::wire::Output;
 mod wire;
 
 fn main() -> Result<()> {
-    // Define the WASI functions globally on the `Config`.
     let engine = Engine::default();
     let mut linker = Linker::new(&engine);
     wasmtime_wasi::add_to_linker(&mut linker, |s| s)?;
 
-    let input = Input {
-        name: "Rust".into(),
-        num: 10,
-    };
-    let serialized_input = serde_json::to_string(&input)?;
-
-    let stdin = ReadPipe::from(serialized_input);
-    let stdout = WritePipe::new_in_memory();
-
     let wasi = WasiCtxBuilder::new()
-        // .stdin(Box::new(stdin.clone()))
-        // .stdout(Box::new(stdout.clone()))
         .inherit_stdout()
         .inherit_stderr()
         .build();
@@ -49,13 +34,7 @@ fn main() -> Result<()> {
     let mem_size: i32 = buf.len() as i32;
 
     linker
-        .func_wrap(
-            "host",
-            "get_input_size",
-            move || -> i32 {
-                mem_size
-            },
-        )
+        .func_wrap("host", "get_input_size", move || -> i32 { mem_size })
         .expect("should define the function");
     linker
         .func_wrap(
@@ -75,7 +54,7 @@ fn main() -> Result<()> {
             },
         )
         .expect("should define the function");
-    
+
     let output: Arc<Mutex<Output>> = Arc::new(Mutex::new(Output { names: vec![] }));
     let output_ = output.clone();
     linker
@@ -92,17 +71,20 @@ fn main() -> Result<()> {
                 let mut buffer: Vec<u8> = vec![0; capacity as usize];
                 match mem.read(&caller, offset, &mut buffer) {
                     Ok(()) => {
-                        println!("Buffer = {:?}, ptr = {}, capacity = {}", buffer, ptr, capacity);
+                        println!(
+                            "Buffer = {:?}, ptr = {}, capacity = {}",
+                            buffer, ptr, capacity
+                        );
                         match serde_json::from_slice::<Output>(&buffer) {
                             Ok(serialized_output) => {
                                 let mut output = output.lock().unwrap();
                                 *output = serialized_output;
                                 Ok(())
-                            },
+                            }
                             Err(err) => {
                                 let msg = format!("failed to serialize host memory: {}", err);
                                 Err(Trap::new(msg))
-                            },
+                            }
                         }
                     }
                     _ => Err(Trap::new("failed to read host memory")),
@@ -123,11 +105,6 @@ fn main() -> Result<()> {
         .expect("should call the function");
 
     drop(store);
-
-    // let contents: Vec<u8> = stdout.try_into_inner()
-    //     .map_err(|_err| anyhow::Error::msg("sole remaining reference"))?
-    //     .into_inner();
-    // let output: Output = serde_json::from_slice(&contents)?;
 
     let output = output.lock();
     println!("output: {:?}", output);

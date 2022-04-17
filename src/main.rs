@@ -1,11 +1,11 @@
-use std::{io::stdin, error::Error};
+use std::error::Error;
 
 use wire::{Input, Output};
 
 mod wire;
 
 #[link(wasm_import_module = "host")]
-extern {
+extern "C" {
     fn get_input_size() -> i32;
     fn get_input(ptr: i32);
     fn set_output(ptr: i32, size: i32);
@@ -25,30 +25,20 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     println!("input_buf = {:?}", input_buf);
 
-    let input: Input = serde_json::from_slice(&input_buf)
-        .map_err(|e| {
-            eprintln!("ser: {e}");
-            e
-        })?;
-    
+    let input: Input = serde_json::from_slice(&input_buf).map_err(|e| {
+        eprintln!("ser: {e}");
+        e
+    })?;
+
     println!("input = {:?}", input);
 
-    // let input: Input = serde_json::from_reader(stdin())
-    //     .map_err(|e| {
-    //         eprintln!("ser: {e}");
-    //         e
-    //     })?;
-
-    let names: Vec<String> = (0..input.num)
-        .map(|_idx| input.name.clone())
-        .collect();
+    let names: Vec<String> = (0..input.num).map(|_idx| input.name.clone()).collect();
 
     let output = Output { names };
-    let serialized = serde_json::to_vec(&output)
-        .map_err(|e| {
-            eprintln!("de: {e}");
-            e
-        })?;
+    let serialized = serde_json::to_vec(&output).map_err(|e| {
+        eprintln!("de: {e}");
+        e
+    })?;
     let size = serialized.len() as i32;
     let ptr = serialized.as_ptr();
     std::mem::forget(ptr);
@@ -56,8 +46,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     unsafe {
         set_output(ptr as i32, size);
     }
-
-    // println!("{serialized}");
 
     Ok(())
 }
